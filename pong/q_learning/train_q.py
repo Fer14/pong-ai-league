@@ -19,9 +19,9 @@ from ball import RealPhysicsBall
 from scorer import Scorer
 import constants as c
 
-REPLAY_MEMORY_SIZE = 1_000
-MIN_REPLAY_MEMORY_SIZE = 200
-MINIBATCH_SIZE = 128
+REPLAY_MEMORY_SIZE = 500
+MIN_REPLAY_MEMORY_SIZE = 100
+MINIBATCH_SIZE = 32
 DISCOUNT = 0.99
 UPDATE_TARGET_EVERY = 10
 AGGREGATE_STATS_EVERY = 100
@@ -30,11 +30,11 @@ MIN_EPSILON = 0.001
 MIN_REWARD = -200  # For model save
 
 # set cuda to false
-import tensorflow as tf
+# import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-print(tf.config.list_physical_devices("GPU"))
+# print(tf.config.list_physical_devices("GPU"))
 
 
 class DQNAgent:
@@ -44,7 +44,7 @@ class DQNAgent:
         self.model = self.create_model()
 
         # Target model
-        self.target_model = self.create_model()
+        self.target_model = self.create_model(trainable=False)
         self.target_model.set_weights(self.model.get_weights())
 
         # An array with last n steps for training
@@ -54,15 +54,15 @@ class DQNAgent:
         self.target_update_counter = 0
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
 
-    def create_model(self):
+    def create_model(self, trainable=True):
         # create a dense model with 6 input neurons, and 5 output neurons
         model = Sequential()
-        model.add(Dense(6, input_shape=(6,), activation="relu"))
-        model.add(Dense(5, activation="relu"))
-        model.add(Dense(5, activation="relu"))
+        model.add(Dense(6, input_shape=(6,), activation="relu", trainable=trainable))
+        model.add(Dense(5, activation="relu", trainable=trainable))
+        model.add(Dense(5, activation="relu", trainable=trainable))
 
         model.compile(
-            loss="mse", optimizer=Adam(learning_rate=0.001), metrics=["accuracy"]
+            loss="mse", optimizer=Adam(learning_rate=0.01), metrics=["accuracy"]
         )
 
         return model
@@ -129,10 +129,8 @@ class DQNAgent:
             print(
                 f"Episode: {episode}, average reward: {average_reward}, min: {min_reward}, max: {max_reward}"
             )
-            print(
-                f"{len(ep_rewards)} last episodes and {len(self.replay_memory)} in replay memory"
-            )
             if average_reward >= MIN_REWARD:
+                print("Saving model...")
                 self.model.save(f"checkpoints/{date.today()}/model.model")
 
     def decay_epsilon(self, epsilon):
