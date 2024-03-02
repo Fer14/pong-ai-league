@@ -7,17 +7,19 @@ import constants as c
 
 class PongGame:
 
-    def __init__(self, default_pong=True, logo="../imgs/big_logo_2.png"):
-        pygame.init()
-        self.screen = pygame.display.set_mode((c.WIDTH, c.HEIGHT))
-        pygame.display.set_caption("PONG AI LEAGUE")
-        logo_img = pygame.transform.smoothscale(
-            pygame.image.load(logo),
-            (50, 32),
-        )
+    def __init__(self, display=True, default_pong=True, logo="../imgs/big_logo_2.png"):
+        self.display = display
+        if self.display:
+            pygame.init()
+            self.screen = pygame.display.set_mode((c.WIDTH, c.HEIGHT))
+            pygame.display.set_caption("PONG AI LEAGUE")
+            logo_img = pygame.transform.smoothscale(
+                pygame.image.load(logo),
+                (50, 32),
+            )
 
-        # Set the window icon
-        pygame.display.set_icon(logo_img)
+            # Set the window icon
+            pygame.display.set_icon(logo_img)
         if default_pong:
             self.init_default_pong()
 
@@ -81,7 +83,8 @@ class PongGame:
         self.paddle1.move(self.ball)
         self.paddle2.move(self.ball)
         self.ball.move(self.paddle1, self.paddle2, self.scorer)
-        self.draw()
+        if self.display:
+            self.draw()
 
     def play(self):
         # Game loop

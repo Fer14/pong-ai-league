@@ -34,30 +34,33 @@ class Scorer:
         left_logo,
         font="../font/Gliker-Bold.ttf",
         logo="../imgs/paddle.png",
+        display=True,
     ):
         self.width = width
         self.height = height
         self.left_score = 0
         self.right_score = 0
-        self.left_color = left_color
-        self.right_color = right_color
-        self.left_name = left_name
-        self.right_name = right_name
-        self.font = pygame.font.Font(font, 24)
-        self.logo = pygame.transform.scale(
-            pygame.image.load(logo),
-            (89, 50),
-        )
-        self.left_logo = pygame.transform.scale(
-            pygame.image.load(left_logo),
-            (60, 33),
-        )
-        self.right_logo = pygame.transform.scale(
-            pygame.image.load(right_logo),
-            (60, 33),
-        )
-        self.left_text_color = get_contrast_color(left_color)
-        self.right_text_color = get_contrast_color(right_color)
+        self.display = display
+        if self.display:
+            self.left_color = left_color
+            self.right_color = right_color
+            self.left_name = left_name
+            self.right_name = right_name
+            self.font = pygame.font.Font(font, 24)
+            self.logo = pygame.transform.scale(
+                pygame.image.load(logo),
+                (89, 50),
+            )
+            self.left_logo = pygame.transform.scale(
+                pygame.image.load(left_logo),
+                (60, 33),
+            )
+            self.right_logo = pygame.transform.scale(
+                pygame.image.load(right_logo),
+                (60, 33),
+            )
+            self.left_text_color = get_contrast_color(left_color)
+            self.right_text_color = get_contrast_color(right_color)
         self.left_hits = 0
         self.right_hits = 0
 

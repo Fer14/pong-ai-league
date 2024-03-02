@@ -259,10 +259,11 @@ class PongGameQTraining(PongGame):
 def main():
 
     EPISODES = 20_000
+    DISPLAY = False
     epsilon = 1
 
     agent = DQNAgent()
-    env = PongGameQTraining(default_pong=False)
+    env = PongGameQTraining(default_pong=False, display=DISPLAY)
 
     # batch_size = MINIBATCH_SIZE  # Define your batch size
     # batch_transitions = []
@@ -276,9 +277,10 @@ def main():
 
         done = False
         while not done:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    quit()
+            if DISPLAY:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        quit()
 
             action = agent.act_epsilon_greedy(epsilon, current_state)
 

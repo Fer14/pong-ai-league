@@ -25,17 +25,17 @@ MIN_REPLAY_MEMORY_SIZE = 200
 MINIBATCH_SIZE = 128
 DISCOUNT = 0.99
 UPDATE_TARGET_EVERY = 10
-AGGREGATE_STATS_EVERY = 100
+AGGREGATE_STATS_EVERY = 25
 EPSILON_DECAY = 0.99975
 MIN_EPSILON = 0.001
 MIN_REWARD = -200  # For model save
 
 # set cuda to false
-import tensorflow as tf
+# import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-print(tf.config.list_physical_devices("GPU"))
+# print(tf.config.list_physical_devices("GPU"))
 
 
 class PGAgent:
@@ -112,8 +112,10 @@ class PGAgent:
 
 
 class PongGamePGTraining(PongGame):
-    def __init__(self, default_pong=True, logo="../../imgs/big_logo_2.png"):
-        super().__init__(default_pong=default_pong, logo=logo)
+    def __init__(
+        self, default_pong=True, logo="../../imgs/big_logo_2.png", display=True
+    ):
+        super().__init__(display=display, default_pong=default_pong, logo=logo)
         self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
 
     def mirror_decision(self, decision):
@@ -178,16 +180,18 @@ class PongGamePGTraining(PongGame):
                 logo="../../imgs/paddle.png",
                 left_logo="../../imgs/team_logos/pg.png",
                 right_logo="../../imgs/team_logos/pg.png",
+                display=self.display,
             ),
         )
         return self.state()
 
-    def step_pg(self, action):
+    def step_pg(self, action, draw=False):
         decision1 = self.decision_dict[action]
         self.paddle1.move(self.ball, move=decision1)
         self.paddle2.move(self.ball, move=self.mirror_decision(decision1))
         self.ball.move(self.paddle1, self.paddle2, self.scorer)
-        self.draw()
+        if draw:
+            self.draw()
 
         # manage rewards
         reward = 0
@@ -222,28 +226,31 @@ class PongGamePGTraining(PongGame):
 def main():
 
     EPISODES = 2_000
+    DISPLAY = False
 
     agent = PGAgent()
-    env = PongGamePGTraining(default_pong=False)
+    env = PongGamePGTraining(display=DISPLAY, default_pong=False)
 
     losses = np.zeros(EPISODES)
     reward_sums = np.zeros(EPISODES)
     accuracy = np.zeros(EPISODES)
 
-    X = []
-    y = []
-    r = []
+    best_loss = 100
 
     for episode in tqdm(range(1, EPISODES + 1), unit="episodes"):
 
         current_state = env.init_pg_learning()
         episode_reward = 0
+        X = []
+        y = []
+        r = []
 
         done = False
         while not done:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    quit()
+            if DISPLAY:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        quit()
 
             action = agent.act(np.array([current_state]))
             new_state, reward, done = env.step_pg(action)
@@ -272,6 +279,11 @@ def main():
 
         losses[episode] = loss
         accuracy[episode] = acc
+
+        if loss < best_loss:
+            best_loss = loss
+            agent.model.save(f"checkpoints/{date.today()}/pg_model_{episode}.h5")
+            print(f"Model saved at checkpoints/{date.today()}/pg_model_{episode}.h5")
 
         reward_sums[episode] = episode_reward
         agent.print_stats(episode, episode_reward, losses, accuracy)
