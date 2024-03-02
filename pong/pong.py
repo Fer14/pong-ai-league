@@ -63,6 +63,12 @@ class PongGame:
         self.ball = ball
         self.scorer = scorer
 
+    def restart(self):
+        self.ball.restart(paddle_left=self.paddle1, paddle_right=self.paddle2)
+        self.paddle1.restart()
+        self.paddle2.restart()
+        self.scorer.restart()
+
     def draw(self):
         self.screen.fill(c.BLACK)
         pygame.draw.line(

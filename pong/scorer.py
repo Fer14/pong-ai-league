@@ -89,3 +89,9 @@ class Scorer:
 
         win.blit(self.left_logo, (5, 5))
         win.blit(self.right_logo, (730, 5))
+
+    def restart(self):
+        self.left_score = 0
+        self.right_score = 0
+        self.left_hits = 0
+        self.right_hits = 0

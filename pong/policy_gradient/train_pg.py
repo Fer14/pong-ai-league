@@ -25,7 +25,7 @@ MIN_REPLAY_MEMORY_SIZE = 200
 MINIBATCH_SIZE = 128
 DISCOUNT = 0.99
 UPDATE_TARGET_EVERY = 10
-AGGREGATE_STATS_EVERY = 25
+AGGREGATE_STATS_EVERY = 5
 EPSILON_DECAY = 0.99975
 MIN_EPSILON = 0.001
 MIN_REWARD = -200  # For model save
@@ -97,17 +97,14 @@ class PGAgent:
 
     def print_stats(self, episode, reward_sums, losses, accuracy):
         if episode % AGGREGATE_STATS_EVERY == 0:
-            avg_reward = np.mean(
-                reward_sums[max(0, episode - AGGREGATE_STATS_EVERY) : episode]
-            )
-            avg_loss = np.mean(
-                losses[max(0, episode - AGGREGATE_STATS_EVERY) : episode]
-            )
-            avg_acc = np.mean(
-                accuracy[max(0, episode - AGGREGATE_STATS_EVERY) : episode]
-            )
+            start_idx = max(0, episode - AGGREGATE_STATS_EVERY)
+            end_idx = episode + 1
+            print(reward_sums[start_idx:end_idx])
+            avg_reward = np.mean(reward_sums[start_idx:end_idx])
+            avg_loss = np.mean(losses[start_idx:end_idx])
+            avg_acc = np.mean(accuracy[start_idx:end_idx])
             print(
-                f"Episode: {episode}, Average Loss: {avg_reward}, Average Reward: {avg_loss}, Average Accuracy: {avg_acc}"
+                f"Episode: {episode}, Average Loss: {avg_loss}, Average Reward: {avg_reward}, Average Accuracy: {avg_acc}"
             )
 
 
@@ -117,6 +114,10 @@ class PongGamePGTraining(PongGame):
     ):
         super().__init__(display=display, default_pong=default_pong, logo=logo)
         self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
+
+    def restart_pg(self):
+        self.restart()
+        return self.state()
 
     def mirror_decision(self, decision):
         if decision == "LEFT":
@@ -237,9 +238,11 @@ def main():
 
     best_loss = 100
 
+    current_state = env.init_pg_learning()
+
     for episode in tqdm(range(1, EPISODES + 1), unit="episodes"):
 
-        current_state = env.init_pg_learning()
+        current_state = env.restart_pg()
         episode_reward = 0
         X = []
         y = []
@@ -286,7 +289,8 @@ def main():
             print(f"Model saved at checkpoints/{date.today()}/pg_model_{episode}.h5")
 
         reward_sums[episode] = episode_reward
-        agent.print_stats(episode, episode_reward, losses, accuracy)
+        print(episode_reward)
+        agent.print_stats(episode, reward_sums, losses, accuracy)
 
 
 if __name__ == "__main__":

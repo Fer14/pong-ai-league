@@ -75,6 +75,12 @@ class Paddle:
     def unblock(self):
         self.blocked = False
 
+    def restart(self):
+        self.x, self.y = (
+            c.LEFT_PADDLE_INIT_POS if self.field == "left" else c.RIGHT_PADDLE_INIT_POS
+        )
+        self.last_position = (self.x, self.y)
+
 
 class UserPaddle(Paddle):
 
