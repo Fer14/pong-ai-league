@@ -285,8 +285,10 @@ def main():
 
         if loss < best_loss:
             best_loss = loss
-            agent.model.save(f"checkpoints/{date.today()}/pg_model_{episode}.h5")
-            print(f"Model saved at checkpoints/{date.today()}/pg_model_{episode}.h5")
+            agent.model.save(f"checkpoints/{date.today()}/pg_model_{episode}_{loss}.h5")
+            print(
+                f"Model saved at checkpoints/{date.today()}/pg_model_{episode}_{loss}.h5"
+            )
 
         reward_sums[episode] = episode_reward
         print(episode_reward)
