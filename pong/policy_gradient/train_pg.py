@@ -10,7 +10,7 @@ import pygame
 from datetime import date
 import os
 from pg_player import PGPaddle
-
+from memory_profiler import profile
 
 sys.path.append("../")
 
@@ -99,7 +99,6 @@ class PGAgent:
         if episode % AGGREGATE_STATS_EVERY == 0:
             start_idx = max(0, episode - AGGREGATE_STATS_EVERY)
             end_idx = episode + 1
-            print(reward_sums[start_idx:end_idx])
             avg_reward = np.mean(reward_sums[start_idx:end_idx])
             avg_loss = np.mean(losses[start_idx:end_idx])
             avg_acc = np.mean(accuracy[start_idx:end_idx])
@@ -291,7 +290,6 @@ def main():
             )
 
         reward_sums[episode] = episode_reward
-        print(episode_reward)
         agent.print_stats(episode, reward_sums, losses, accuracy)
 
 
