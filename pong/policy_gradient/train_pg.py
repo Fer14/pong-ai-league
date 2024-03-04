@@ -37,6 +37,9 @@ MIN_REWARD = -200  # For model save
 
 # print(tf.config.list_physical_devices("GPU"))
 
+# https://gist.github.com/kkweon/c8d1caabaf7b43317bc8825c226045d2
+# https://github.com/llSourcell/Policy_Gradients_to_beat_Pong/blob/master/demo.py
+
 
 class PGAgent:
 
@@ -65,6 +68,9 @@ class PGAgent:
         return np.argmax(self.model.predict(current_state, verbose=0))
 
     def train(self, x, y, r, batch_size):
+        # https://gist.github.com/kkweon/c8d1caabaf7b43317bc8825c226045d2
+        # https://github.com/llSourcell/Policy_Gradients_to_beat_Pong/blob/master/demo.py
+        # https://chat.openai.com/c/e8077e19-15e7-49a6-a587-2157e7e56739
         self.model.fit(
             x,
             y,

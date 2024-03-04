@@ -71,6 +71,7 @@ class PPOgent:
 
     @tf.function
     def train_step(self, states, actions, advantages, old_probabilities):
+        # https://keras.io/examples/rl/ppo_cartpole/
         with tf.GradientTape() as tape:
             probabilities = self.model(states, training=True)
             action_masks = tf.one_hot(actions, self.output_shape)
