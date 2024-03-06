@@ -126,7 +126,7 @@ class SARSAAgent:
         #     self.target_update_counter = 0
 
     def print_stats(self, ep_rewards, episode):
-        if not episode % AGGREGATE_STATS_EVERY or episode == 1:
+        if not episode % AGGREGATE_STATS_EVERY:
             average_reward = np.mean(ep_rewards[-AGGREGATE_STATS_EVERY:])
             min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
             max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
