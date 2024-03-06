@@ -35,6 +35,7 @@ MIN_REWARD = -200  # For model save
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # print(tf.config.list_physical_devices("GPU"))
+from scalene import scalene_profiler
 
 
 class DQNAgent:
@@ -149,8 +150,10 @@ class DQNAgent:
 
 
 class PongGameQTraining(PongGame):
-    def __init__(self, default_pong=True, logo="../../imgs/big_logo_2.png"):
-        super().__init__(default_pong=default_pong, logo=logo)
+    def __init__(
+        self, default_pong=True, logo="../../imgs/big_logo_2.png", display=True
+    ):
+        super().__init__(default_pong=default_pong, logo=logo, display=display)
         self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
 
     def mirror_decision(self, decision):
@@ -215,6 +218,7 @@ class PongGameQTraining(PongGame):
                 logo="../../imgs/paddle.png",
                 left_logo="../../imgs/team_logos/dqn.png",
                 right_logo="../../imgs/team_logos/dqn.png",
+                display=self.display,
             ),
         )
         return self.state()
@@ -224,7 +228,8 @@ class PongGameQTraining(PongGame):
         self.paddle1.move(self.ball, move=decision1)
         self.paddle2.move(self.ball, move=self.mirror_decision(decision1))
         self.ball.move(self.paddle1, self.paddle2, self.scorer)
-        # self.draw()
+        if self.display:
+            self.draw()
 
         # manage rewards
         reward = 0
@@ -257,8 +262,10 @@ class PongGameQTraining(PongGame):
 
 
 def main():
+    scalene_profiler.start()
+    # EPISODES = 20_000
+    EPISODES = 600
 
-    EPISODES = 20_000
     DISPLAY = False
     epsilon = 1
 
@@ -305,6 +312,7 @@ def main():
         agent.print_stats(ep_rewards=ep_rewards, episode=episode)
 
         epsilon = agent.decay_epsilon(epsilon)
+    scalene_profiler.stop()
 
 
 if __name__ == "__main__":
