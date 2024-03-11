@@ -11,7 +11,6 @@ import pygame
 from datetime import date
 import os
 
-
 sys.path.append("../")
 
 from pong import PongGame
@@ -25,22 +24,22 @@ MINIBATCH_SIZE = 32
 DISCOUNT = 0.99
 UPDATE_TARGET_EVERY = 10
 AGGREGATE_STATS_EVERY = 100
-EPSILON_DECAY = 0.99975
+EPSILON_DECAY = 0.9975
 MIN_EPSILON = 0.001
 MIN_REWARD = -200  # For model save
 
 # set cuda to false
-# import tensorflow as tf
+import tensorflow as tf
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # print(tf.config.list_physical_devices("GPU"))
-from scalene import scalene_profiler
+# from scalene import scalene_profiler
 
 
 class DQNAgent:
 
-    def __init__(self):
+    def __init__(self, epsilon):
         # Main model
         self.model = self.create_model()
 
@@ -53,6 +52,8 @@ class DQNAgent:
 
         # Used to count when to update target network with main network's weights
         self.target_update_counter = 0
+
+        self.epsilon = epsilon
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
 
     def create_model(self, trainable=True):
@@ -132,19 +133,19 @@ class DQNAgent:
             )
             if average_reward >= MIN_REWARD:
                 print("Saving model...")
-                self.model.save(f"checkpoints/{date.today()}/model.model")
+                self.model.save(f"checkpoints/{date.today()}/model.h5")
 
-    def decay_epsilon(self, epsilon):
-        if epsilon > MIN_EPSILON:
-            epsilon *= EPSILON_DECAY
-            epsilon = max(MIN_EPSILON, epsilon)
-        return epsilon
+    def decay_epsilon(self):
+        if self.epsilon > MIN_EPSILON:
+            self.epsilon *= EPSILON_DECAY
+            # print(f"epsilon: {self.epsilon} of size {sys.getsizeof(self.epsilon)} ")
+            self.epsilon = max(MIN_EPSILON, self.epsilon)
 
-    def act_epsilon_greedy(self, epsilon, current_state):
-        if np.random.random() > epsilon:
+    def act_epsilon_greedy(self, current_state):
+        if np.random.random() > self.epsilon:
             action = np.argmax(self.get_qs(current_state))
         else:
-            action = np.random.choice([0, 1, 2, 3, 4])
+            action = np.random.choice(np.arange(0, 5))
 
         return action
 
@@ -182,6 +183,10 @@ class PongGameQTraining(PongGame):
             self.ball.last_x,
             self.ball.last_y,
         )
+
+    def restart_(self):
+        self.restart()
+        return self.state()
 
     def init_q_learning(self):
         self.init_pong(
@@ -262,25 +267,25 @@ class PongGameQTraining(PongGame):
 
 
 def main():
-    scalene_profiler.start()
+
+    # scalene_profiler.start()
     # EPISODES = 20_000
-    EPISODES = 600
+    EPISODES = 2000
 
     DISPLAY = False
-    epsilon = 1
 
-    agent = DQNAgent()
+    agent = DQNAgent(epsilon=1)
     env = PongGameQTraining(default_pong=False, display=DISPLAY)
 
-    # batch_size = MINIBATCH_SIZE  # Define your batch size
-    # batch_transitions = []
     ep_rewards = []
+
+    current_state = env.init_q_learning()
 
     for episode in tqdm(range(1, EPISODES + 1), unit="episodes"):
 
         episode_reward = 0
         step = 1
-        current_state = env.init_q_learning()
+        current_state = env.restart_()
 
         done = False
         while not done:
@@ -289,8 +294,7 @@ def main():
                     if event.type == pygame.QUIT:
                         quit()
 
-            action = agent.act_epsilon_greedy(epsilon, current_state)
-
+            action = agent.act_epsilon_greedy(current_state)
             new_state, reward, done = env.step_q(action)
             episode_reward += reward
 
@@ -298,21 +302,23 @@ def main():
             step += 1
 
             agent.update_replay_memory((current_state, action, reward, new_state, done))
-            # batch_transitions.append((current_state, action, reward, new_state, done))
-            # if len(batch_transitions) >= batch_size:
-            #     for transition in batch_transitions:
-            #         agent.update_replay_memory(transition)
-            #     agent.train(done)  # , minibatch)
-            #     batch_transitions = []
-        agent.train(done)
 
-        if len(ep_rewards) >= REPLAY_MEMORY_SIZE:
-            ep_rewards.pop(0)
+        # agent.train(done)
+
+        ep_rewards = (
+            ep_rewards[1:] if len(ep_rewards) >= REPLAY_MEMORY_SIZE else ep_rewards
+        )
+
         ep_rewards.append(episode_reward)
         agent.print_stats(ep_rewards=ep_rewards, episode=episode)
 
-        epsilon = agent.decay_epsilon(epsilon)
-    scalene_profiler.stop()
+        agent.decay_epsilon()
+
+        if DISPLAY:
+            pygame.display.quit()
+            pygame.quit()
+
+    # scalene_profiler.stop()
 
 
 if __name__ == "__main__":
