@@ -20,7 +20,7 @@ def main():
         field="left",
         train=False,
     )
-    paddle2 = UserPaddle(
+    paddle2 = HeuristicsUnited(
         x=c.RIGHT_PADDLE_INIT_POS[0],
         y=c.RIGHT_PADDLE_INIT_POS[1],
         width=c.PADDLE_WIDTH,
@@ -33,7 +33,7 @@ def main():
         c.BALL_INIT_POS[0],
         c.BALL_INIT_POS[1],
         c.BALL_RADIUS,
-        ball_init_speeds=[-2, 2],
+        ball_init_speeds=[-2, -1, -0.75, 0.75, 1, 2],
     )
 
     scorer = Scorer(
