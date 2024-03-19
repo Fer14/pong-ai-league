@@ -14,11 +14,16 @@ from ball import Ball, RealPhysicsBall, FunnierPhysicsBall
 from scorer import Scorer
 import constants as c
 
+PUNISH_EVERY_X = 30
+MAX_HITS = 25
+
 
 class PongGameNeatTraining(PongGame):
 
-    def __init__(self, default_pong=True, logo="../../imgs/big_logo_2.png"):
-        super().__init__(default_pong=default_pong, logo=logo)
+    def __init__(
+        self, default_pong=True, logo="../../imgs/big_logo_2.png", display=False
+    ):
+        super().__init__(default_pong=default_pong, logo=logo, display=display)
 
     def mirror_decision(self, decision):
         if decision == "LEFT":
@@ -63,7 +68,7 @@ class PongGameNeatTraining(PongGame):
                 c.BALL_INIT_POS[0],
                 c.BALL_INIT_POS[1],
                 c.BALL_RADIUS,
-                ball_init_speeds=[-1, 1],
+                ball_init_speeds=[-2, 2],
             ),
             Scorer(
                 width=c.WIDTH,
@@ -76,6 +81,7 @@ class PongGameNeatTraining(PongGame):
                 logo="../../imgs/paddle.png",
                 left_logo="../../imgs/team_logos/neat.png",
                 right_logo="../../imgs/team_logos/neat.png",
+                display=self.display,
             ),
         )
 
@@ -84,11 +90,14 @@ class PongGameNeatTraining(PongGame):
 
         decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
 
+        genome1_x = []
+        genome2_x = []
         running = True
         while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    quit()
+            if self.display:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        quit()
 
             inputs1 = (
                 self.paddle1.x,
@@ -112,88 +121,115 @@ class PongGameNeatTraining(PongGame):
             output2 = net2.activate(self.mirror_inputs(inputs2))
 
             decision1 = decision_dict[output1.index(max(output1))]
-            decision2 = decision_dict[output2.index(max(output2))]
+            decision2 = self.mirror_decision(decision_dict[output2.index(max(output2))])
 
-            decision2 = self.mirror_decision(decision2)
-
-            if decision1 == "STAY":
-                genome1.fitness -= 0.2
-            if decision2 == "STAY":
-                genome2.fitness -= 0.2
-
-            if (
-                (self.paddle1.x == 0 and decision1 == "LEFT")
-                or (decision1 == "RIGHT" and self.paddle1.x == c.LINE_X[0] - 10)
-                or (decision1 == "UP" and self.paddle1.y == 0)
-                or (
-                    decision1 == "DOWN"
-                    and self.paddle1.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
-                )
-            ):
-                genome1.fitness -= 1
-            if (
-                (self.paddle2.x == c.WIDTH - c.LINE_X[0] and decision2 == "RIGHT")
-                or (decision2 == "LEFT" and self.paddle2.x == c.LINE_X[0] + 10)
-                or (decision2 == "UP" and self.paddle2.y == 0)
-                or (
-                    decision2 == "DOWN"
-                    and self.paddle2.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
-                )
-            ):
-                genome2.fitness -= 1
+            # if (
+            #     (self.paddle1.x == 0 and decision1 == "LEFT")
+            #     or (decision1 == "RIGHT" and self.paddle1.x == c.LINE_X[0] - 10)
+            #     or (decision1 == "UP" and self.paddle1.y == 0)
+            #     or (
+            #         decision1 == "DOWN"
+            #         and self.paddle1.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
+            #     )
+            # ):
+            #     genome1.fitness -= 0.2
+            # if (
+            #     (self.paddle2.x == c.WIDTH - c.LINE_X[0] and decision2 == "RIGHT")
+            #     or (decision2 == "LEFT" and self.paddle2.x == c.LINE_X[0] + 10)
+            #     or (decision2 == "UP" and self.paddle2.y == 0)
+            #     or (
+            #         decision2 == "DOWN"
+            #         and self.paddle2.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
+            #     )
+            # ):
+            #     genome2.fitness -= 0.2
 
             self.paddle1.move(self.ball, move=decision1)
             self.paddle2.move(self.ball, move=decision2)
-
-            if self.paddle1.last_position[0] == self.paddle1.x:
-                genome1.fitness -= 0.2
-            if self.paddle2.last_position[0] == self.paddle2.x:
-                genome2.fitness -= 0.2
-
             self.ball.move(self.paddle1, self.paddle2, self.scorer)
-            self.draw()
+
+            genome1_x.append(self.paddle1.x)
+            genome2_x.append(self.paddle2.x)
+
+            # if len(genome1_x) >= PUNISH_EVERY_X and genome1_x[-PUNISH_EVERY_X] in range(
+            #     self.paddle1.x - 5, self.paddle1.x + 5
+            # ):
+            #     genome1.fitness -= 0.05
+
+            # if len(genome2_x) >= PUNISH_EVERY_X and genome1_x[-PUNISH_EVERY_X] in range(
+            #     self.paddle2.x - 5, self.paddle2.x + 5
+            # ):
+            #     genome2.fitness -= 0.05
+
+            if self.display:
+                self.draw()
 
             if (
                 self.scorer.left_score == 1
                 or self.scorer.right_score == 1
-                or self.scorer.left_hits >= 50
-                or self.scorer.right_hits >= 50
+                or self.scorer.left_hits >= MAX_HITS
+                or self.scorer.right_hits >= MAX_HITS
             ):
-                genome1.fitness += self.scorer.left_hits
-                genome2.fitness += self.scorer.right_hits
+
+                if self.scorer.left_score == 1:
+                    genome2.fitness -= 10
+
+                    if self.scorer.left_hits == 0:
+                        genome1.fitness += genome1.fitness / genome1.games
+                    else:
+                        genome1.fitness += self.scorer.left_hits
+
+                if self.scorer.right_score == 1:
+                    genome1.fitness -= 10
+
+                    if self.scorer.right_hits == 0:
+                        genome2.fitness += genome2.fitness / genome2.games
+                    else:
+                        genome2.fitness += self.scorer.right_hits
+
                 break
 
 
 def eval_genomes(genomes, config, shuffle=False):
+    size = len(genomes)
+    display = False
+    game = PongGameNeatTraining(default_pong=False, display=display)
 
-    game = PongGameNeatTraining(default_pong=False)
+    for genomeid, genome in genomes:
+        genome.fitness = 0
+        genome.games = 0
+
     for i, (genome_id1, genome1) in enumerate(genomes):
-        if i == len(genomes) - 1:
+        if i == size - 1:
             break
-        genome1.fitness = 0
         for genome_id2, genome2 in genomes[i + 1 :]:
-            genome2.fitness = 0 if genome2.fitness == None else genome2.fitness
+            # Make sure the genomes are different
+            if genome_id1 == genome_id2:
+                continue
+            genome1.games += 1
+            genome2.games += 1
+            game.sim_neat(genome1, genome2, config)
 
-            suffled_genomes = [genome1, genome2]
-            if shuffle:
-                random.shuffle(suffled_genomes)
-            game.sim_neat(suffled_genomes[0], suffled_genomes[1], config)
+        genome1.fitness /= size
 
 
 def run_neat(config):
-    # p = neat.Checkpointer.restore_checkpoint("./checkpoints/neat-checkpoint40")
+    # p = neat.Checkpointer.restore_checkpoint(
+    #     f"./checkpoints/{date.today()}/neat-checkpoint-99"
+    # )
     # p.config = config
     p = neat.Population(config)
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(
-        neat.Checkpointer(
-            1, filename_prefix=f"./checkpoints/{date.today()}/neat-checkpoint-"
-        )
-    )
+    # p.add_reporter(
+    #     neat.Checkpointer(
+    #         100, filename_prefix=f"./checkpoints/{date.today()}/neat-checkpoint-"
+    #     )
+    # )
 
-    winner = p.run(eval_genomes, 120)
+    winner = p.run(eval_genomes, 200)
+    # with open(f"best_found_{date.today()}.pickle", "wb") as f:
     with open("best_both_player.pickle", "wb") as f:
         pickle.dump(winner, f)
 
