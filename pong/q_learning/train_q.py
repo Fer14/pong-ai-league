@@ -1,6 +1,7 @@
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.optimizers import Adam
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 from collections import deque
 import numpy as np
 import random
@@ -29,12 +30,7 @@ MIN_EPSILON = 0.001
 MIN_REWARD = -200  # For model save
 
 # set cuda to false
-import tensorflow as tf
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-# print(tf.config.list_physical_devices("GPU"))
-# from scalene import scalene_profiler
+import torch
 
 
 class DQNAgent:
@@ -42,10 +38,11 @@ class DQNAgent:
     def __init__(self, epsilon):
         # Main model
         self.model = self.create_model()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
 
         # Target model
         self.target_model = self.create_model(trainable=False)
-        self.target_model.set_weights(self.model.get_weights())
+        self.target_model.load_state_dict(self.model.state_dict())
 
         # An array with last n steps for training
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
@@ -58,14 +55,18 @@ class DQNAgent:
 
     def create_model(self, trainable=True):
         # create a dense model with 6 input neurons, and 5 output neurons
-        model = Sequential()
-        model.add(Dense(6, input_shape=(6,), activation="relu", trainable=trainable))
-        model.add(Dense(5, activation="relu", trainable=trainable))
-        model.add(Dense(5, activation="relu", trainable=trainable))
-
-        model.compile(
-            loss="mse", optimizer=Adam(learning_rate=0.01), metrics=["accuracy"]
+        model = nn.Sequential(
+            nn.Linear(6, 6),
+            nn.ReLU(),
+            nn.Linear(6, 5),
+            nn.ReLU(),
+            nn.Linear(5, 5),
+            nn.ReLU(),
         )
+
+        if not trainable:
+            for param in model.parameters():
+                param.requires_grad = False
 
         return model
 
@@ -73,7 +74,9 @@ class DQNAgent:
         self.replay_memory.append(transition)
 
     def get_qs(self, state):
-        return self.model.predict(np.array(state).reshape(-1, 6), verbose=0)[0]
+        state = torch.FloatTensor([state])
+        with torch.no_grad():
+            return self.model(state).numpy()[0]
 
     def train(self, terminal_state):
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
@@ -81,11 +84,13 @@ class DQNAgent:
 
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
-        current_states = np.array([transition[0] for transition in minibatch])
-        current_qs_list = self.model.predict(current_states, verbose=0)
+        current_states = torch.FloatTensor([transition[0] for transition in minibatch])
+        new_current_states = torch.FloatTensor(
+            [transition[3] for transition in minibatch]
+        )
 
-        new_current_states = np.array([transition[3] for transition in minibatch])
-        future_qs_list = self.target_model.predict(new_current_states, verbose=0)
+        current_qs_list = self.model(current_states)
+        future_qs_list = self.target_model(new_current_states)
 
         X = []
         y = []
@@ -98,29 +103,29 @@ class DQNAgent:
             done,
         ) in enumerate(minibatch):
             if not done:
-                new_q = reward + DISCOUNT * np.max(future_qs_list[index])
+                new_q = reward + DISCOUNT * torch.max(future_qs_list[index])
             else:
                 new_q = reward
 
-            current_qs = current_qs_list[index]
+            current_qs = current_qs_list[index].tolist()
             current_qs[action] = new_q
 
             X.append(current_state)
             y.append(current_qs)
 
-        self.model.fit(
-            np.array(X),
-            np.array(y),
-            batch_size=MINIBATCH_SIZE,
-            verbose=0,
-            shuffle=False,
-        )
+        X = torch.FloatTensor(X)
+        y = torch.FloatTensor(y)
+
+        self.optimizer.zero_grad()
+        loss = F.mse_loss(self.model(X), y)
+        loss.backward()
+        self.optimizer.step()
 
         if terminal_state:
             self.target_update_counter += 1
 
         if self.target_update_counter > UPDATE_TARGET_EVERY:
-            self.target_model.set_weights(self.model.get_weights())
+            self.target_model.load_state_dict(self.model.state_dict())
             self.target_update_counter = 0
 
     def print_stats(self, ep_rewards, episode):
@@ -133,7 +138,10 @@ class DQNAgent:
             )
             if average_reward >= MIN_REWARD:
                 print("Saving model...")
-                self.model.save(f"checkpoints/{date.today()}/model.h5")
+                torch.save(
+                    self.model.state_dict(),
+                    os.path.join(f"checkpoints/{date.today()}", "model.pth"),
+                )
 
     def decay_epsilon(self):
         if self.epsilon > MIN_EPSILON:
@@ -288,6 +296,7 @@ def main():
         current_state = env.restart_()
 
         done = False
+
         while not done:
             if DISPLAY:
                 for event in pygame.event.get():
@@ -303,7 +312,7 @@ def main():
 
             agent.update_replay_memory((current_state, action, reward, new_state, done))
 
-        # agent.train(done)
+        agent.train(done)
 
         ep_rewards = (
             ep_rewards[1:] if len(ep_rewards) >= REPLAY_MEMORY_SIZE else ep_rewards
