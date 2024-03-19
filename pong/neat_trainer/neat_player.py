@@ -35,7 +35,7 @@ class NeatPaddle(Paddle):
             neat.DefaultStagnation,
             config_path,
         )
-        with open("./neat_trainer/best_left_player.pickle", "rb") as f:
+        with open("./neat_trainer/best_both_player.pickle", "rb") as f:
             genome = pickle.load(f)
             self.net = neat.nn.FeedForwardNetwork.create(genome, config)
 
@@ -74,7 +74,7 @@ class NeatPaddle(Paddle):
             self.y += self.speed
         if decision == "LEFT" and self.x > 0:
             self.x -= self.speed
-        if decision == "RIGHT" and self.x < c.LINE_X[0] - c.PADDLE_WIDTH:
+        if decision == "RIGHT" and self.x < c.LINE_X[0] - c.PADDLE_WIDTH - 15:
             self.x += self.speed
 
         self.last_position = (last_x, last_y)
@@ -99,7 +99,7 @@ class NeatPaddle(Paddle):
             self.y -= self.speed
         if decision == "DOWN" and self.y < c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT:
             self.y += self.speed
-        if decision == "LEFT" and self.x > c.LINE_X[0] + c.LINE_WIDTH:
+        if decision == "LEFT" and self.x > c.LINE_X[0] + c.LINE_WIDTH + 15:
             self.x -= self.speed
         if decision == "RIGHT" and self.x < c.WIDTH - c.PADDLE_WIDTH:
             self.x += self.speed
