@@ -222,8 +222,8 @@ class PongGameQTraining(PongGame):
                 c.BALL_INIT_POS[0],
                 c.BALL_INIT_POS[1],
                 c.BALL_RADIUS,
-                ball_init_speeds=[-1, 1, 0.5, -0.5],
-                training_left=True,
+                ball_init_speeds=[0.25, -0.25, 0.15, -0.15],
+                training_left=False,
             ),
             Scorer(
                 width=c.WIDTH,
@@ -274,14 +274,16 @@ class PongGameQTraining(PongGame):
             or self.scorer.left_hits >= 20
             or self.scorer.right_hits >= 20
         ):
-            if self.scorer.left_score == 1:
-                reward += 10
-                if self.scorer.left_hits > 0:
-                    reward += self.scorer.left_hits
-            elif self.scorer.right_score == 1:
-                reward -= 10
-                if self.scorer.left_hits > 0:
-                    reward += self.scorer.left_hits
+
+            reward += self.scorer.left_hits
+            # if self.scorer.left_score == 1:
+            #     reward += 10
+            #     if self.scorer.left_hits > 0:
+            #         reward += self.scorer.left_hits
+            # elif self.scorer.right_score == 1:
+            #     reward -= 10
+            #     if self.scorer.left_hits > 0:
+            #         reward += self.scorer.left_hits
 
             done = True
         return self.state(), reward, done
