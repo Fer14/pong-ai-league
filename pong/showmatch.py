@@ -5,13 +5,14 @@ from neat_trainer.neat_player import NeatPaddle
 import constants as c
 from ball import RealPhysicsBall
 from scorer import Scorer
+from q_learning.dqn_player import DQNPaddle
 import pygame
 
 
 def main():
 
     pong = PongGame(default_pong=True)
-    paddle1 = NeatPaddle(
+    paddle1 = DQNPaddle(
         x=c.LEFT_PADDLE_INIT_POS[0],
         y=c.LEFT_PADDLE_INIT_POS[1],
         width=c.PADDLE_WIDTH,

@@ -5,7 +5,7 @@ import constants as c
 
 
 class Ball:
-    def __init__(self, x, y, radius, ball_init_speeds=None):
+    def __init__(self, x, y, radius, ball_init_speeds=None, training_left=False):
         self.x = x
         self.y = y
         self.radius = radius
@@ -13,8 +13,14 @@ class Ball:
             ball_init_speeds if ball_init_speeds is not None else c.BAL_INIT_SPEED
         )
 
-        self.vx = random.choice(self.init_speeds)
-        self.vy = random.choice(self.init_speeds)
+        self.training_left = training_left
+
+        if self.training_left:
+            self.vx = -1
+            self.vy = random.choice(self.init_speeds)
+        else:
+            self.vx = random.choice(self.init_speeds)
+            self.vy = random.choice(self.init_speeds)
         self.last_x = x
         self.last_y = y
 
@@ -28,8 +34,12 @@ class Ball:
     def restart(self, paddle_left, paddle_right):
         self.x = c.WIDTH // 2
         self.y = c.HEIGHT // 2
-        self.vx = random.choice(self.init_speeds)
-        self.vy = random.choice(self.init_speeds)
+        if self.training_left:
+            self.vx = -1
+            self.vy = random.choice(self.init_speeds)
+        else:
+            self.vx = random.choice(self.init_speeds)
+            self.vy = random.choice(self.init_speeds)
         paddle_left.unblock()
         paddle_right.unblock()
 

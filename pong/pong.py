@@ -97,7 +97,7 @@ class PongGame:
         clock = pygame.time.Clock()
         running = True
         while running:
-            clock.tick(120)  # Cap the frame rate
+            clock.tick(60)  # Cap the frame rate
 
             # Event handling
             for event in pygame.event.get():
