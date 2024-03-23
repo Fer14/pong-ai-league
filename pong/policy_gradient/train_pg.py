@@ -1,16 +1,15 @@
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.optimizers import Adam
-from collections import deque
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
 import numpy as np
-import random
 import sys
 from tqdm import tqdm
 import pygame
 from datetime import date
 import os
 from pg_player import PGPaddle
-from memory_profiler import profile
 
 sys.path.append("../")
 
@@ -20,15 +19,9 @@ from scorer import Scorer
 import constants as c
 
 
-REPLAY_MEMORY_SIZE = 1_000
-MIN_REPLAY_MEMORY_SIZE = 200
-MINIBATCH_SIZE = 128
-DISCOUNT = 0.99
-UPDATE_TARGET_EVERY = 10
+DISCOUNT = 0.95
 AGGREGATE_STATS_EVERY = 5
-EPSILON_DECAY = 0.99975
-MIN_EPSILON = 0.001
-MIN_REWARD = -200  # For model save
+
 
 # set cuda to false
 # import tensorflow as tf
@@ -43,47 +36,66 @@ MIN_REWARD = -200  # For model save
 
 class PGAgent:
 
-    def __init__(self):
+    def __init__(self, device):
         # Main model
-        self.model = self.create_model()
+        self.device = device
+        self.model = self.create_model().to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
 
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
+        self.onpolicy_reset()
+
+    def onpolicy_reset(self):
+        self.log_probs = []
 
     def create_model(self):
-        # create a dense model with 6 input neurons, and 5 output neurons
-        model = Sequential()
-        model.add(Dense(6, input_shape=(6,), activation="relu"))
-        model.add(Dense(5, activation="relu"))
-        model.add(Dense(5, activation="softmax"))
-
-        model.compile(
-            loss="sparse_categorical_crossentropy",
-            optimizer=Adam(learning_rate=0.001),
-            metrics=["accuracy"],
+        model = nn.Sequential(
+            nn.Linear(6, 10),
+            nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
+            nn.Linear(10, 5),
         )
-
+        model[-1].weight.data.fill_(0.0)
+        # model.add_module("softmax", nn.Softmax(dim=-1))
         return model
 
-    def act(self, current_state):
-        return np.argmax(self.model.predict(current_state, verbose=0))
+    def forward(self, x):
+        return self.model(x)
 
-    def train(self, x, y, r, batch_size):
-        # https://gist.github.com/kkweon/c8d1caabaf7b43317bc8825c226045d2
-        # https://github.com/llSourcell/Policy_Gradients_to_beat_Pong/blob/master/demo.py
-        # https://chat.openai.com/c/e8077e19-15e7-49a6-a587-2157e7e56739
-        self.model.fit(
-            x,
-            y,
-            batch_size=batch_size,
-            verbose=0,
-            shuffle=False,
-            sample_weight=r,
-        )
+    #    def act(self, state):
+    #     state = torch.FloatTensor([state]).to(self.device)
+    #     with torch.no_grad():
+    #         probs = self.model(state)
+    #         # Add a small constant to avoid taking the logarithm of zero
+    #     action = np.random.choice(5, p=probs.cpu().numpy()[0])
+    #     self.log_probs.append(torch.log(probs[0][action]))
+    #     return action
 
-    def eval(self, x, y, r, batch_size):
-        return self.model.evaluate(
-            x, y, batch_size=batch_size, verbose=0  # sample_weight=r,
-        )
+    def act(self, state, save_logs=True):
+        state = torch.FloatTensor([state]).to(self.device)
+        with torch.no_grad():
+            logits = self.forward(state)
+        prob_dist = torch.distributions.Categorical(logits=logits)
+        action = prob_dist.sample()
+        if save_logs:
+            self.log_probs.append(prob_dist.log_prob(action))
+        return action.item()
+
+    def train(self, r):
+
+        log_probs = torch.stack(self.log_probs).to(self.device)
+        r = self.disccount_n_standarise(r)
+        rewards = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
+
+        loss = torch.sum(-log_probs * rewards)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.onpolicy_reset()
+        if torch.isnan(loss).any():
+            raise ValueError("Loss is nan, wtf!")
+        return loss.item()
 
     def discount_reward(self, rewards):
         discounted_rewards = np.zeros_like(rewards, dtype=np.float32)
@@ -98,19 +110,8 @@ class PGAgent:
     def disccount_n_standarise(self, r):
         dr = self.discount_reward(r)
         dr -= np.mean(dr)
-        dr /= np.std(dr)
+        dr /= np.std(dr) if np.std(dr) > 0 else 1
         return dr
-
-    def print_stats(self, episode, reward_sums, losses, accuracy):
-        if episode % AGGREGATE_STATS_EVERY == 0:
-            start_idx = max(0, episode - AGGREGATE_STATS_EVERY)
-            end_idx = episode + 1
-            avg_reward = np.mean(reward_sums[start_idx:end_idx])
-            avg_loss = np.mean(losses[start_idx:end_idx])
-            avg_acc = np.mean(accuracy[start_idx:end_idx])
-            print(
-                f"Episode: {episode}, Average Loss: {avg_loss}, Average Reward: {avg_reward}, Average Accuracy: {avg_acc}"
-            )
 
 
 class PongGamePGTraining(PongGame):
@@ -121,7 +122,11 @@ class PongGamePGTraining(PongGame):
         self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
 
     def restart_pg(self):
-        self.restart()
+        self.ball.restart(paddle_left=self.paddle1, paddle_right=self.paddle2)
+        self.paddle1.restart()
+        self.paddle2.restart()
+        self.scorer.restart()
+
         return self.state()
 
     def mirror_decision(self, decision):
@@ -173,7 +178,8 @@ class PongGamePGTraining(PongGame):
                 c.BALL_INIT_POS[0],
                 c.BALL_INIT_POS[1],
                 c.BALL_RADIUS,
-                ball_init_speeds=[-1, 1],
+                ball_init_speeds_x=[1.5, -1.5],
+                ball_init_speeds_y=[0.25, -0.25, 0.5, -0.5, 0.75, -0.75],
             ),
             Scorer(
                 width=c.WIDTH,
@@ -191,67 +197,60 @@ class PongGamePGTraining(PongGame):
         )
         return self.state()
 
-    def step_pg(self, action, draw=False):
+    def step_pg(self, action, action2):
         decision1 = self.decision_dict[action]
+        decision2 = self.decision_dict[action2]
         self.paddle1.move(self.ball, move=decision1)
-        self.paddle2.move(self.ball, move=self.mirror_decision(decision1))
+        self.paddle2.move(self.ball, move=self.mirror_decision(decision2))
         self.ball.move(self.paddle1, self.paddle2, self.scorer)
-        if draw:
+        if self.display:
             self.draw()
 
         # manage rewards
         reward = 0
         done = False
 
-        if (
-            (self.paddle1.x == 0 and decision1 == "LEFT")
-            or (decision1 == "RIGHT" and self.paddle1.x == c.LINE_X[0] - 10)
-            or (decision1 == "UP" and self.paddle1.y == 0)
-            or (
-                decision1 == "DOWN"
-                and self.paddle1.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
-            )
-        ):
-            reward -= 1
+        # Reward for scoring or hitting the ball
 
-        if decision1 == "STAY":
-            reward -= 0.2
+        if self.ball.collision_left > 0:
+            reward += 1
+
+        if self.scorer.right_score == 1:
+            reward -= 1
 
         if (
             (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
             or self.scorer.right_score == 1
-            or self.scorer.left_hits >= 50
-            or self.scorer.right_hits >= 50
+            or self.scorer.left_hits >= 20
         ):
-            reward += self.scorer.left_hits
-            reward -= self.scorer.right_hits
             done = True
+
+        if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
+            self.restart_pg()
+
         return self.state(), reward, done
 
 
 def main():
 
-    EPISODES = 2_000
-    DISPLAY = False
+    EPISODES = 20000
+    DISPLAY = True
+    TRAIN_EVERY = 1
 
-    agent = PGAgent()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Detected device: ", device)
+
+    agent = PGAgent(device=device)
     env = PongGamePGTraining(display=DISPLAY, default_pong=False)
 
-    losses = np.zeros(EPISODES)
-    reward_sums = np.zeros(EPISODES)
-    accuracy = np.zeros(EPISODES)
-
-    best_loss = 100
+    best_reward = -np.inf
 
     current_state = env.init_pg_learning()
+    r = []
 
     for episode in tqdm(range(1, EPISODES + 1), unit="episodes"):
 
         current_state = env.restart_pg()
-        episode_reward = 0
-        X = []
-        y = []
-        r = []
 
         done = False
         while not done:
@@ -260,43 +259,33 @@ def main():
                     if event.type == pygame.QUIT:
                         quit()
 
-            action = agent.act(np.array([current_state]))
-            new_state, reward, done = env.step_pg(action)
+            action = agent.act(current_state)
+            action2 = agent.act(env.mirror_inputs(current_state), save_logs=False)
+            new_state, reward, done = env.step_pg(action, action2)
             current_state = new_state
-
-            episode_reward += reward
-
-            X.append(current_state)
-            y.append(action)
             r.append(reward)
 
-        # end of episode
-        discounted_rewards = agent.disccount_n_standarise(r)
-        agent.train(
-            x=np.array(X),
-            y=np.array(y),
-            r=np.array(discounted_rewards),
-            batch_size=len(X),
-        )
-        loss, acc = agent.eval(
-            x=np.array(X),
-            y=np.array(y),
-            r=np.array(discounted_rewards),
-            batch_size=len(X),
-        )
-
-        losses[episode] = loss
-        accuracy[episode] = acc
-
-        if loss < best_loss:
-            best_loss = loss
-            agent.model.save(f"checkpoints/{date.today()}/pg_model_{episode}_{loss}.h5")
-            print(
-                f"Model saved at checkpoints/{date.today()}/pg_model_{episode}_{loss}.h5"
+        if sum(r) > best_reward:
+            best_reward = sum(r)
+            torch.save(
+                agent.model.state_dict(),
+                os.path.join(f"checkpoints/{date.today()}", "model.pth"),
             )
+            print("*****************************************************")
+            print(
+                f"Model saved at checkpoints/{date.today()}/model.pth at episode {episode} with reward {best_reward} "
+            )
+            print("*****************************************************")
 
-        reward_sums[episode] = episode_reward
-        agent.print_stats(episode, reward_sums, losses, accuracy)
+        # end of episode
+        if episode % TRAIN_EVERY == 0:
+            loss = agent.train(r)
+            # print("Reward: ", sum(r))
+            r = []
+
+        # print(
+        #     f"Episode: {episode}, Loss: {loss:.2f}, Reward: {sum(r)}",
+        # )
 
 
 if __name__ == "__main__":
