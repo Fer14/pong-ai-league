@@ -92,12 +92,15 @@ class PongGame:
         if self.display:
             self.draw()
 
+        if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
+            self.restart()
+
     def play(self):
         # Game loop
         clock = pygame.time.Clock()
         running = True
         while running:
-            clock.tick(60)  # Cap the frame rate
+            clock.tick(120)  # Cap the frame rate
 
             # Event handling
             for event in pygame.event.get():

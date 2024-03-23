@@ -5,24 +5,37 @@ import constants as c
 
 
 class Ball:
-    def __init__(self, x, y, radius, ball_init_speeds=None, training_left=False):
+    def __init__(
+        self,
+        x,
+        y,
+        radius,
+        ball_init_speeds_x=None,
+        ball_init_speeds_y=None,
+        training_left=False,
+    ):
         self.x = x
         self.y = y
         self.radius = radius
-        self.init_speeds = (
-            ball_init_speeds if ball_init_speeds is not None else c.BAL_INIT_SPEED
+        self.x_init_speeds = (
+            ball_init_speeds_x if ball_init_speeds_x is not None else c.BAL_INIT_SPEED
+        )
+        self.y_init_speeds = (
+            ball_init_speeds_y if ball_init_speeds_y is not None else c.BAL_INIT_SPEED
         )
 
         self.training_left = training_left
 
         if self.training_left:
             self.vx = -1
-            self.vy = random.choice(self.init_speeds)
+            self.vy = random.choice(self.x_init_speeds)
         else:
-            self.vx = random.choice(self.init_speeds)
-            self.vy = random.choice(self.init_speeds)
+            self.vx = random.choice(self.x_init_speeds)
+            self.vy = random.choice(self.y_init_speeds)
         self.last_x = x
         self.last_y = y
+        self.collision_left = False
+        self.collision_right = False
 
         # self.im = pygame.transform.scale(
         #     pygame.image.load(
@@ -38,8 +51,8 @@ class Ball:
             self.vx = -1
             self.vy = random.choice(self.init_speeds)
         else:
-            self.vx = random.choice(self.init_speeds)
-            self.vy = random.choice(self.init_speeds)
+            self.vx = random.choice(self.x_init_speeds)
+            self.vy = random.choice(self.y_init_speeds)
         paddle_left.unblock()
         paddle_right.unblock()
 
@@ -50,6 +63,8 @@ class Ball:
         # win.blit(self.im, (blit_x, blit_y))
 
     def move(self, paddle_left, paddle_right, scorer):
+        self.collision_left = False
+        self.collision_right = False
         self.last_x, self.last_y = self.x, self.y
         self.x += self.vx
         self.y += self.vy
@@ -113,6 +128,7 @@ class RealPhysicsBall(Ball):
 
             paddle.block()
             scorer.left_hits += 1
+            self.collision_left = True
 
     def check_collision_right_field(self, paddle, scorer):
         if self.rect().colliderect(paddle.rect()) and not paddle.blocked:
@@ -131,6 +147,7 @@ class RealPhysicsBall(Ball):
 
             paddle.block()
             scorer.right_hits += 1
+            self.collision_right = True
 
     def update(self, paddle_velocity, angle_reflection):
 

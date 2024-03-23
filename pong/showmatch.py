@@ -6,13 +6,14 @@ import constants as c
 from ball import RealPhysicsBall
 from scorer import Scorer
 from q_learning.dqn_player import DQNPaddle
+from policy_gradient.pg_player import PGPaddle
 import pygame
 
 
 def main():
 
     pong = PongGame(default_pong=True)
-    paddle1 = DQNPaddle(
+    paddle1 = PGPaddle(
         x=c.LEFT_PADDLE_INIT_POS[0],
         y=c.LEFT_PADDLE_INIT_POS[1],
         width=c.PADDLE_WIDTH,
@@ -34,7 +35,8 @@ def main():
         c.BALL_INIT_POS[0],
         c.BALL_INIT_POS[1],
         c.BALL_RADIUS,
-        ball_init_speeds=[-2, -1, 1, 2],
+        ball_init_speeds_x=[2, -2],
+        ball_init_speeds_y=[0.15, -0.15, 0.25, -0.25, 0.5, -0.5],
     )
 
     scorer = Scorer(
