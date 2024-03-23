@@ -34,6 +34,22 @@ AGGREGATE_STATS_EVERY = 5
 # https://github.com/llSourcell/Policy_Gradients_to_beat_Pong/blob/master/demo.py
 
 
+class BaselineAgent:
+    def __init__(self):
+        pass
+
+    def act(self, state):
+        # Baseline agent moves paddle up if the ball is above the paddle, down if it's below
+        paddle_y = state[1]
+        ball_y = state[3]
+        if paddle_y < ball_y:
+            return 0  # Move up
+        elif paddle_y > ball_y:
+            return 1  # Move down
+        else:
+            return 4  # Stay in place
+
+
 class PGAgent:
 
     def __init__(self, device):
@@ -83,6 +99,19 @@ class PGAgent:
         return action.item()
 
     def train(self, r):
+
+        #### baseline
+        # log_probs = torch.stack(self.log_probs).to(self.device)
+        # r = self.disccount_n_standarise(r)
+        # advantages = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
+        # baseline_actions_tensor = torch.tensor(
+        #     baseline_actions, dtype=torch.long, device=self.device
+        # ).view(-1, 1)
+        # baseline_probs = torch.gather(log_probs, 1, baseline_actions_tensor)
+        # advantages -= baseline_probs
+        # loss = torch.sum(-log_probs * advantages)
+
+        ####
 
         log_probs = torch.stack(self.log_probs).to(self.device)
         r = self.disccount_n_standarise(r)
@@ -241,6 +270,7 @@ def main():
     print("Detected device: ", device)
 
     agent = PGAgent(device=device)
+    baseline_agent = BaselineAgent()  # Instantiate the baseline agent
     env = PongGamePGTraining(display=DISPLAY, default_pong=False)
 
     best_reward = -np.inf
@@ -260,6 +290,9 @@ def main():
                         quit()
 
             action = agent.act(current_state)
+            baseline_action = baseline_agent.act(
+                current_state
+            )  # Get action from the baseline agent
             action2 = agent.act(env.mirror_inputs(current_state), save_logs=False)
             new_state, reward, done = env.step_pg(action, action2)
             current_state = new_state
