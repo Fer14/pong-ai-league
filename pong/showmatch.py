@@ -34,7 +34,7 @@ def main():
         c.BALL_INIT_POS[0],
         c.BALL_INIT_POS[1],
         c.BALL_RADIUS,
-        ball_init_speeds=[-2, -1, -0.75, 0.75, 1, 2],
+        ball_init_speeds=[-2, -1, 1, 2],
     )
 
     scorer = Scorer(
