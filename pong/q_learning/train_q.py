@@ -17,15 +17,16 @@ sys.path.append("../")
 from pong import PongGame
 from ball import RealPhysicsBall
 from scorer import Scorer
+from heuristics_united import HeuristicsUnited
 import constants as c
 
 REPLAY_MEMORY_SIZE = 2000
 MIN_REPLAY_MEMORY_SIZE = 200
-MINIBATCH_SIZE = 128
+MINIBATCH_SIZE = 256
 DISCOUNT = 0.99
-UPDATE_TARGET_EVERY = 100
+UPDATE_TARGET_EVERY = 50
 AGGREGATE_STATS_EVERY = 100
-EPSILON_DECAY = 0.99975
+EPSILON_DECAY = 0.9975
 MIN_EPSILON = 0.001
 
 # set cuda to false
@@ -38,7 +39,7 @@ class DQNAgent:
         self.device = device
         # Main model
         self.model = self.create_model().to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
 
         # Target model
         self.target_model = self.create_model(trainable=False).to(device)
@@ -52,16 +53,16 @@ class DQNAgent:
 
         self.epsilon = epsilon
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
-        self.min_reward = -200
+        self.mean_reward = -999
 
     def create_model(self, trainable=True):
         # create a dense model with 6 input neurons, and 5 output neurons
         model = nn.Sequential(
-            nn.Linear(6, 6),
+            nn.Linear(6, 10),
             nn.ReLU(),
-            nn.Linear(6, 5),
+            nn.Linear(10, 10),
             nn.ReLU(),
-            nn.Linear(5, 5),
+            nn.Linear(10, 5),
             nn.ReLU(),
         )
 
@@ -121,6 +122,7 @@ class DQNAgent:
 
         self.optimizer.zero_grad()
         loss = F.mse_loss(self.model(X), y)
+
         loss.backward()
         self.optimizer.step()
 
@@ -131,16 +133,18 @@ class DQNAgent:
             self.target_model.load_state_dict(self.model.state_dict())
             self.target_update_counter = 0
 
+        return loss
+
     def print_stats(self, ep_rewards, episode):
         if not episode % AGGREGATE_STATS_EVERY:
             average_reward = np.mean(ep_rewards[-AGGREGATE_STATS_EVERY:])
             min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
             max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
             print(
-                f"Episode: {episode}, average reward: {average_reward}, min: {min_reward}, max: {max_reward}"
+                f"Episode: {episode}, avg reward: {average_reward:.2f}, min: {min_reward:.2f}, max: {max_reward:.2f}, epsilon: {self.epsilon:.2f}"
             )
-            if average_reward >= self.min_reward:
-                self.min_reward = average_reward
+            if average_reward >= self.mean_reward:
+                self.mean_reward = average_reward
                 print("Saving model with average reward: ", average_reward)
                 torch.save(
                     self.model.state_dict(),
@@ -150,7 +154,6 @@ class DQNAgent:
     def decay_epsilon(self):
         if self.epsilon > MIN_EPSILON:
             self.epsilon *= EPSILON_DECAY
-            # print(f"epsilon: {self.epsilon} of size {sys.getsizeof(self.epsilon)} ")
             self.epsilon = max(MIN_EPSILON, self.epsilon)
 
     def act_epsilon_greedy(self, current_state):
@@ -200,7 +203,7 @@ class PongGameQTraining(PongGame):
         self.restart()
         return self.state()
 
-    def init_q_learning(self):
+    def init_q_learning(self, episode):
         self.init_pong(
             DQNPaddle(
                 x=c.LEFT_PADDLE_INIT_POS[0],
@@ -222,7 +225,7 @@ class PongGameQTraining(PongGame):
                 c.BALL_INIT_POS[0],
                 c.BALL_INIT_POS[1],
                 c.BALL_RADIUS,
-                ball_init_speeds=[0.25, -0.25, 0.15, -0.15],
+                ball_init_speeds=[0.5, -0.5, 0.25, -0.25, 0.15, -0.15, 1, -1],
                 training_left=False,
             ),
             Scorer(
@@ -254,38 +257,28 @@ class PongGameQTraining(PongGame):
         reward = 0
         done = False
 
-        # if (
-        #     (self.paddle1.x == 0 and decision1 == "LEFT")
-        #     or (decision1 == "RIGHT" and self.paddle1.x == c.LINE_X[0] - 10)
-        #     or (decision1 == "UP" and self.paddle1.y == 0)
-        #     or (
-        #         decision1 == "DOWN"
-        #         and self.paddle1.y == c.HEIGHT + c.SCORE_HEIGT - c.PADDLE_HEIGHT
-        #     )
-        # ):
-        #     reward -= 0.5
-
         # if decision1 == "STAY":
+        #     reward -= 0.05
+
+        # if decision1 == "RIGHT" and self.paddle1.x >= c.LINE_X[0] - 100:
         #     reward -= 0.1
 
+        # Reward for scoring or hitting the ball
+        if self.scorer.left_hits > 0:
+            reward += self.scorer.left_hits
+
+        if self.scorer.right_score == 1:
+            reward -= 1
+
+        # Check if the game is finished
         if (
-            (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
+            self.scorer.left_score == 1
             or self.scorer.right_score == 1
             or self.scorer.left_hits >= 20
             or self.scorer.right_hits >= 20
         ):
-
-            reward += self.scorer.left_hits
-            # if self.scorer.left_score == 1:
-            #     reward += 10
-            #     if self.scorer.left_hits > 0:
-            #         reward += self.scorer.left_hits
-            # elif self.scorer.right_score == 1:
-            #     reward -= 10
-            #     if self.scorer.left_hits > 0:
-            #         reward += self.scorer.left_hits
-
             done = True
+
         return self.state(), reward, done
 
 
@@ -295,7 +288,7 @@ def main():
         "cuda" if torch.cuda.is_available() else "cpu"
     )  # EPISODES = 20_000
     print("Detected device: ", device)
-    EPISODES = 20000
+    EPISODES = 50000
 
     DISPLAY = False
 
@@ -310,7 +303,7 @@ def main():
 
         episode_reward = 0
         step = 1
-        current_state = env.init_q_learning()
+        current_state = env.init_q_learning(episode)
 
         done = False
 
@@ -322,7 +315,11 @@ def main():
 
             action_left = agent.act_epsilon_greedy(current_state)
 
-            action_right = np.argmax(agent.get_qs(env.mirror_inputs(current_state)))
+            # if episode > 1000:
+            # action_right = np.argmax(agent.get_qs(env.mirror_inputs(current_state)))
+            action_right = agent.act_epsilon_greedy(env.mirror_inputs(current_state))
+            # else:
+            #     action_right = 4
 
             new_state, reward, done = env.step_q(action_left, action_right)
             episode_reward += reward

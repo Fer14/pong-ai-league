@@ -26,14 +26,14 @@ class DQNPaddle(Paddle):
     def load_net(self):
         # load pth model with torch
         model_state_dict = torch.load(
-            "/home/fer/Escritorio/pong-ai-league/pong/q_learning/checkpoints/2024-03-20/model.pth"
+            "/home/fer/Escritorio/pong-ai-league/pong/q_learning/checkpoints/2024-03-23/model.pth"
         )
         model = nn.Sequential(
-            nn.Linear(6, 6),
+            nn.Linear(6, 10),
             nn.ReLU(),
-            nn.Linear(6, 5),
+            nn.Linear(10, 10),
             nn.ReLU(),
-            nn.Linear(5, 5),
+            nn.Linear(10, 5),
             nn.ReLU(),
         ).to(self.device)
 
