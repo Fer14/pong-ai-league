@@ -98,20 +98,15 @@ class PGAgent:
             self.log_probs.append(prob_dist.log_prob(action))
         return action.item()
 
-    def train(self, r):
+    def train(self, r, baselines):
 
-        #### baseline
-        # log_probs = torch.stack(self.log_probs).to(self.device)
+        # ##    log_probs = torch.stack(self.log_probs).to(self.device)
         # r = self.disccount_n_standarise(r)
-        # advantages = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
-        # baseline_actions_tensor = torch.tensor(
-        #     baseline_actions, dtype=torch.long, device=self.device
-        # ).view(-1, 1)
-        # baseline_probs = torch.gather(log_probs, 1, baseline_actions_tensor)
-        # advantages -= baseline_probs
-        # loss = torch.sum(-log_probs * advantages)
+        # rewards = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
 
-        ####
+        # # Calculate advantages using baselines
+        # advantages = rewards - torch.tensor(baselines, dtype=torch.float32).view(-1, 1).to(self.device)
+
 
         log_probs = torch.stack(self.log_probs).to(self.device)
         r = self.disccount_n_standarise(r)
@@ -277,6 +272,7 @@ def main():
 
     current_state = env.init_pg_learning()
     r = []
+    baselines = []
 
     for episode in tqdm(range(1, EPISODES + 1), unit="episodes"):
 
@@ -297,6 +293,7 @@ def main():
             new_state, reward, done = env.step_pg(action, action2)
             current_state = new_state
             r.append(reward)
+            baselines.append(baseline_action)
 
         if sum(r) > best_reward:
             best_reward = sum(r)
@@ -312,9 +309,10 @@ def main():
 
         # end of episode
         if episode % TRAIN_EVERY == 0:
-            loss = agent.train(r)
+            loss = agent.train(r, baselines)
             # print("Reward: ", sum(r))
             r = []
+            baselines = []
 
         # print(
         #     f"Episode: {episode}, Loss: {loss:.2f}, Reward: {sum(r)}",
