@@ -315,8 +315,7 @@ def main():
 
         # end of episode
         if episode % TRAIN_EVERY == 0:
-            if sum(r) > 0:
-                loss = agent.train(r, baselines)
+            loss = agent.train(r, baselines)
             # print("loss: ", loss)
             r = []
             baselines = []
