@@ -19,7 +19,7 @@ from scorer import Scorer
 import constants as c
 
 
-DISCOUNT = 0.99
+DISCOUNT = 0.95
 
 
 # set cuda to false
@@ -55,7 +55,7 @@ class PGAgent:
         # Main model
         self.device = device
         self.model = self.create_model().to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)  # Adam
 
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
         self.onpolicy_reset()
@@ -64,8 +64,15 @@ class PGAgent:
         self.log_probs = []
 
     def create_model(self):
-        model = nn.Sequential(nn.Linear(6, 50), nn.ReLU(), nn.Linear(50, 4))
-        model[-1].weight.data.fill_(0.0)
+        model = nn.Sequential(
+            nn.Linear(6, 100),
+            nn.ReLU(),
+            nn.Linear(100, 100),
+            nn.ReLU(),
+            nn.Linear(100, 4),
+            # nn.Softmax(dim=-1),
+        )
+        nn.init.normal_(model[-1].weight, std=0.1)
         model.add_module("softmax", nn.Softmax(dim=-1))
         return model
 
@@ -76,26 +83,25 @@ class PGAgent:
         state = torch.FloatTensor(state).to(self.device)
         action_probs = self.forward(state)
         prob_dist = torch.distributions.Categorical(action_probs)
-        if np.random.rand() < 0.25:
-            action = torch.tensor(np.random.choice(len(action_probs))).to(self.device)
-        else:
-            action = prob_dist.sample().to(self.device)
+        action = prob_dist.sample().to(self.device)
         if save_logs:
             self.log_probs.append(prob_dist.log_prob(action))
 
         return action.item()
 
     def train(self, r, baselines):
+        self.optimizer.zero_grad()
 
         log_probs = torch.stack(self.log_probs).to(self.device)
         r = self.disccount_n_standarise(r)
         rewards = torch.tensor(r).view(-1, 1).to(self.device)
 
         # Calculate advantages using baselines
-        advantages = rewards  # - torch.tensor(baselines, dtype=torch.float32).view(-1, 1).to(self.device)
+        advantages = rewards - torch.tensor(baselines, dtype=torch.float32).view(
+            -1, 1
+        ).to(self.device)
 
         loss = torch.sum(-(log_probs * advantages))
-        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         self.onpolicy_reset()
@@ -230,24 +236,25 @@ class PongGamePGTraining(PongGame):
         reward = 0
         done = False
 
-        # Reward for scoring or hitting the ball
+        # Reward for keeping the ball in play
+        # reward += 0.005
 
+        # Reward for hitting the ball
         if self.ball.collision_left:
             reward += 1
-        # else:
-        #     if not self.paddle1.blocked:
-        #         reward -= 0.05
 
-        if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
-            reward += 1
-
+        # Penalty for missing the ball
         if self.scorer.right_score >= 1:
             reward -= 1
 
+        # Reward for scoring
+        if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
+            reward += 1
+
         # Exploration bonus (optional)
         # You may uncomment and adjust this part to add an exploration bonus
-        if np.random.rand() < 0.25:
-            reward += 0.01  # Small positive reward for exploration
+        # if np.random.rand() < 0.15:
+        #     reward += 0.01  # Small positive reward for exploration
 
         if (
             (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
@@ -258,7 +265,6 @@ class PongGamePGTraining(PongGame):
 
         if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
             self.restart_pg()
-
         return self.state(), reward, done
 
 
@@ -266,7 +272,7 @@ def main():
 
     EPISODES = 20000
     DISPLAY = False
-    TRAIN_EVERY = 1
+    TRAIN_EVERY = 10
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Detected device: ", device)
@@ -309,7 +315,7 @@ def main():
             )
             print("*****************************************************")
             print(
-                f"Model saved at checkpoints/{date.today()}/model.pth at episode {episode} with reward {best_reward} "
+                f"Model saved at checkpoints/{date.today()}/model.pth at episode {episode} with reward {best_reward:.2f} "
             )
             print("*****************************************************")
 

@@ -55,6 +55,8 @@ class Ball:
             self.vy = random.choice(self.y_init_speeds)
         paddle_left.unblock()
         paddle_right.unblock()
+        self.collision_left = False
+        self.collision_right = False
 
     def draw(self, win):
         pygame.draw.circle(win, c.WHITE, (self.x, self.y), self.radius)
