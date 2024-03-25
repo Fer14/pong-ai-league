@@ -89,18 +89,17 @@ class PGAgent:
 
         log_probs = torch.stack(self.log_probs).to(self.device)
         r = self.disccount_n_standarise(r)
-        rewards = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
+        rewards = torch.tensor(r).view(-1, 1).to(self.device)
 
         # Calculate advantages using baselines
         advantages = rewards  # - torch.tensor(baselines, dtype=torch.float32).view(-1, 1).to(self.device)
 
-        loss = torch.sum(-log_probs * advantages)
+        loss = torch.sum(-(log_probs * advantages))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         self.onpolicy_reset()
-        if torch.isnan(loss).any():
-            raise ValueError("Loss is nan, wtf!")
+
         return loss.item()
 
     def discount_reward(self, rewards):
@@ -171,6 +170,7 @@ class PongGamePGTraining(PongGame):
                 height=c.PADDLE_HEIGHT,
                 speed=c.PADDLE_SPEED,
                 field="left",
+                train=True,
             ),
             PGPaddle(
                 x=c.RIGHT_PADDLE_INIT_POS[0],
@@ -187,7 +187,7 @@ class PongGamePGTraining(PongGame):
                 c.BALL_RADIUS,
                 ball_init_speeds_x=[1.5, -1.5],
                 ball_init_speeds_y=[0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1, -1],
-                # training_left=True
+                # training_left=True,
             ),
             Scorer(
                 width=c.WIDTH,
@@ -233,9 +233,10 @@ class PongGamePGTraining(PongGame):
         # Reward for scoring or hitting the ball
 
         if self.ball.collision_left:
-            reward += 0.1
-        else:
-            reward -= 0.1
+            reward += 1
+        # else:
+        #     if not self.paddle1.blocked:
+        #         reward -= 0.05
 
         if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
             reward += 1
@@ -246,7 +247,7 @@ class PongGamePGTraining(PongGame):
         # Exploration bonus (optional)
         # You may uncomment and adjust this part to add an exploration bonus
         if np.random.rand() < 0.25:
-            reward += 0.05  # Small positive reward for exploration
+            reward += 0.01  # Small positive reward for exploration
 
         if (
             (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
@@ -264,7 +265,7 @@ class PongGamePGTraining(PongGame):
 def main():
 
     EPISODES = 20000
-    DISPLAY = True
+    DISPLAY = False
     TRAIN_EVERY = 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -300,7 +301,7 @@ def main():
             r.append(reward)
             baselines.append(baseline_action)
 
-        if sum(r) >= best_reward:
+        if sum(r) > best_reward:
             best_reward = sum(r)
             torch.save(
                 agent.model.state_dict(),
