@@ -16,7 +16,7 @@ class PGPaddle(Paddle):
         self.name = "PG"
         self.color = "#ef3036"  # "#c6dabf"
         self.logo = "../imgs/team_logos/pg.png"
-        self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT", 4: "STAY"}
+        self.decision_dict = {0: "UP", 1: "DOWN", 2: "LEFT", 3: "RIGHT"}
 
         self.train = train
         if not train:
@@ -26,14 +26,12 @@ class PGPaddle(Paddle):
     def load_net(self):
         # load pth model with torch
         model_state_dict = torch.load(
-            "/home/fer/Escritorio/pong-ai-league/pong/policy_gradient/checkpoints/2024-03-23/model.pth"
+            "/home/fer/Escritorio/pong-ai-league/pong/policy_gradient/checkpoints/2024-03-25/model.pth"
         )
         model = model = nn.Sequential(
-            nn.Linear(6, 10), nn.ReLU(), nn.Linear(10, 10), nn.ReLU(), nn.Linear(10, 5)
+            nn.Linear(6, 50), nn.ReLU(), nn.Linear(50, 4), nn.Softmax(dim=-1)
         ).to(self.device)
 
-        for param in model.parameters():
-            param.requires_grad = False
         self.model = model
         self.model.load_state_dict(model_state_dict)
 
