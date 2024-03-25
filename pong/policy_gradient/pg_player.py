@@ -29,7 +29,12 @@ class PGPaddle(Paddle):
             "/home/fer/Escritorio/pong-ai-league/pong/policy_gradient/checkpoints/2024-03-25/model.pth"
         )
         model = model = nn.Sequential(
-            nn.Linear(6, 50), nn.ReLU(), nn.Linear(50, 4), nn.Softmax(dim=-1)
+            nn.Linear(6, 100),
+            nn.ReLU(),
+            nn.Linear(100, 100),
+            nn.ReLU(),
+            nn.Linear(100, 4),
+            nn.Softmax(dim=-1),
         ).to(self.device)
 
         self.model = model

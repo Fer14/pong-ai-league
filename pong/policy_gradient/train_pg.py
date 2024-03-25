@@ -72,7 +72,8 @@ class PGAgent:
             nn.Linear(100, 4),
             # nn.Softmax(dim=-1),
         )
-        nn.init.normal_(model[-1].weight, std=0.1)
+        # nn.init.normal_(model[-1].weight, std=0.1)
+        model[-1].weight.data.fill_(0.0)
         model.add_module("softmax", nn.Softmax(dim=-1))
         return model
 
@@ -237,34 +238,29 @@ class PongGamePGTraining(PongGame):
         done = False
 
         # Reward for keeping the ball in play
-        # reward += 0.005
+        # reward += 0.01
 
         # Reward for hitting the ball
         if self.ball.collision_left:
-            reward += 1
+            reward += 10
 
         # Penalty for missing the ball
         if self.scorer.right_score >= 1:
-            reward -= 1
+            reward -= 10
 
-        # Reward for scoring
-        if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
-            reward += 1
+        # # Reward for scoring
+        # if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
+        #     reward += 1
 
         # Exploration bonus (optional)
         # You may uncomment and adjust this part to add an exploration bonus
         # if np.random.rand() < 0.15:
         #     reward += 0.01  # Small positive reward for exploration
 
-        if (
-            (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
-            or self.scorer.right_score == 1
-            or self.scorer.left_hits >= 20
-        ):
-            done = True
-
         if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
+            done = True
             self.restart_pg()
+
         return self.state(), reward, done
 
 
@@ -272,7 +268,7 @@ def main():
 
     EPISODES = 20000
     DISPLAY = False
-    TRAIN_EVERY = 10
+    TRAIN_EVERY = 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Detected device: ", device)
@@ -322,7 +318,7 @@ def main():
         # end of episode
         if episode % TRAIN_EVERY == 0:
             loss = agent.train(r, baselines)
-            # print("Reward: ", sum(r))
+            # print("loss: ", loss)
             r = []
             baselines = []
 
