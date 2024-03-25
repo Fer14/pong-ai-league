@@ -49,7 +49,7 @@ class Ball:
         self.y = c.HEIGHT // 2
         if self.training_left:
             self.vx = -1
-            self.vy = random.choice(self.init_speeds)
+            self.vy = random.choice(self.y_init_speeds)
         else:
             self.vx = random.choice(self.x_init_speeds)
             self.vy = random.choice(self.y_init_speeds)
