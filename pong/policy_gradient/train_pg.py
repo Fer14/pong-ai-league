@@ -22,17 +22,6 @@ import constants as c
 DISCOUNT = 0.95
 
 
-# set cuda to false
-# import tensorflow as tf
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-# print(tf.config.list_physical_devices("GPU"))
-
-# https://gist.github.com/kkweon/c8d1caabaf7b43317bc8825c226045d2
-# https://github.com/llSourcell/Policy_Gradients_to_beat_Pong/blob/master/demo.py
-
-
 class BaselineAgent:
     def __init__(self):
         pass
@@ -55,7 +44,7 @@ class PGAgent:
         # Main model
         self.device = device
         self.model = self.create_model().to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)  # Adam
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)  # Adam
 
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
         self.onpolicy_reset()
@@ -213,6 +202,8 @@ class PongGamePGTraining(PongGame):
         return self.state()
 
     def step_pg(self, action, agent2):
+        right_curr_score = self.scorer.right_score
+        left_curr_score = self.scorer.left_score
         decision1 = self.decision_dict[action]
         agent2_input = self.mirror_inputs(
             (
@@ -242,11 +233,14 @@ class PongGamePGTraining(PongGame):
 
         # Reward for hitting the ball
         if self.ball.collision_left:
-            reward += 10
+            reward += 1
+
+        # if left_curr_score < self.scorer.left_score:
+        #     reward += 1
 
         # Penalty for missing the ball
-        if self.scorer.right_score >= 1:
-            reward -= 10
+        if right_curr_score < self.scorer.right_score:
+            reward -= 1
 
         # # Reward for scoring
         # if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
@@ -257,7 +251,7 @@ class PongGamePGTraining(PongGame):
         # if np.random.rand() < 0.15:
         #     reward += 0.01  # Small positive reward for exploration
 
-        if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
+        if self.scorer.left_score >= 21 or self.scorer.right_score >= 21:
             done = True
             self.restart_pg()
 
