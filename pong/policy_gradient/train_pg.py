@@ -64,11 +64,7 @@ class PGAgent:
         self.log_probs = []
 
     def create_model(self):
-        model = nn.Sequential(
-            nn.Linear(6, 50),
-            nn.ReLU(),
-            nn.Linear(50, 4)
-        )
+        model = nn.Sequential(nn.Linear(6, 50), nn.ReLU(), nn.Linear(50, 4))
         model[-1].weight.data.fill_(0.0)
         model.add_module("softmax", nn.Softmax(dim=-1))
         return model
@@ -76,15 +72,14 @@ class PGAgent:
     def forward(self, x):
         return self.model(x)
 
-
     def act(self, state, save_logs=True):
         state = torch.FloatTensor(state).to(self.device)
         action_probs = self.forward(state)
         prob_dist = torch.distributions.Categorical(action_probs)
         if np.random.rand() < 0.25:
-            action = torch.tensor(np.random.choice(len(action_probs)))
+            action = torch.tensor(np.random.choice(len(action_probs))).to(self.device)
         else:
-            action = prob_dist.sample()
+            action = prob_dist.sample().to(self.device)
         if save_logs:
             self.log_probs.append(prob_dist.log_prob(action))
 
@@ -97,7 +92,7 @@ class PGAgent:
         rewards = torch.tensor(r, requires_grad=True).view(-1, 1).to(self.device)
 
         # Calculate advantages using baselines
-        advantages = rewards # - torch.tensor(baselines, dtype=torch.float32).view(-1, 1).to(self.device)
+        advantages = rewards  # - torch.tensor(baselines, dtype=torch.float32).view(-1, 1).to(self.device)
 
         loss = torch.sum(-log_probs * advantages)
         self.optimizer.zero_grad()
@@ -184,6 +179,7 @@ class PongGamePGTraining(PongGame):
                 height=c.PADDLE_HEIGHT,
                 speed=c.PADDLE_SPEED,
                 field="right",
+                train=True,
             ),
             RealPhysicsBall(
                 c.BALL_INIT_POS[0],
@@ -211,17 +207,21 @@ class PongGamePGTraining(PongGame):
 
     def step_pg(self, action, agent2):
         decision1 = self.decision_dict[action]
-        agent2_input = self.mirror_inputs((
-            self.paddle2.x,
-            self.paddle2.y,
-            self.ball.x,
-            self.ball.y,
-            self.ball.last_x,
-            self.ball.last_y)
+        agent2_input = self.mirror_inputs(
+            (
+                self.paddle2.x,
+                self.paddle2.y,
+                self.ball.x,
+                self.ball.y,
+                self.ball.last_x,
+                self.ball.last_y,
+            )
         )
         decision2 = agent2.act(agent2_input, save_logs=False)
         self.paddle1.move(self.ball, move=decision1)
-        self.paddle2.move(self.ball, move=self.mirror_decision(decision2))
+        self.paddle2.move(
+            self.ball, move=self.mirror_decision(self.decision_dict[decision2])
+        )
         self.ball.move(self.paddle1, self.paddle2, self.scorer)
         if self.display:
             self.draw()
@@ -232,10 +232,10 @@ class PongGamePGTraining(PongGame):
 
         # Reward for scoring or hitting the ball
 
-        # if self.ball.collision_left:
-        #     reward += 0.1
-        # else:
-        #     reward -= 0.1
+        if self.ball.collision_left:
+            reward += 0.1
+        else:
+            reward -= 0.1
 
         if self.scorer.left_score >= 1 and self.scorer.left_hits >= 1:
             reward += 1
@@ -243,11 +243,10 @@ class PongGamePGTraining(PongGame):
         if self.scorer.right_score >= 1:
             reward -= 1
 
-
         # Exploration bonus (optional)
         # You may uncomment and adjust this part to add an exploration bonus
-        # if np.random.rand() < 0.25:
-        #     reward += 0.05  # Small positive reward for exploration
+        if np.random.rand() < 0.25:
+            reward += 0.05  # Small positive reward for exploration
 
         if (
             (self.scorer.left_score == 1 and self.scorer.left_hits >= 1)
@@ -265,7 +264,7 @@ class PongGamePGTraining(PongGame):
 def main():
 
     EPISODES = 20000
-    DISPLAY = False
+    DISPLAY = True
     TRAIN_EVERY = 1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
