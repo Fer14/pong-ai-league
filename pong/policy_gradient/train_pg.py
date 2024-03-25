@@ -44,7 +44,7 @@ class PGAgent:
         # Main model
         self.device = device
         self.model = self.create_model().to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)  # Adam
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4)  # Adam
 
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
         self.onpolicy_reset()
@@ -251,7 +251,7 @@ class PongGamePGTraining(PongGame):
         # if np.random.rand() < 0.15:
         #     reward += 0.01  # Small positive reward for exploration
 
-        if self.scorer.left_score >= 21 or self.scorer.right_score >= 21:
+        if self.scorer.left_score >= 1 or self.scorer.right_score >= 1:
             done = True
             self.restart_pg()
 
@@ -309,16 +309,17 @@ def main():
             )
             print("*****************************************************")
 
+        print(
+            f"Episode: {episode},  Reward: {sum(r)}",
+        )
+
         # end of episode
         if episode % TRAIN_EVERY == 0:
-            loss = agent.train(r, baselines)
+            if sum(r) > 0:
+                loss = agent.train(r, baselines)
             # print("loss: ", loss)
             r = []
             baselines = []
-
-        # print(
-        #     f"Episode: {episode}, Loss: {loss:.2f}, Reward: {sum(r)}",
-        # )
 
 
 if __name__ == "__main__":
