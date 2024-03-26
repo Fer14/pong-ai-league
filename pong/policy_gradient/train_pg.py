@@ -91,7 +91,10 @@ class PGAgent:
             -1, 1
         ).to(self.device)
 
-        loss = torch.sum(-(log_probs * advantages))
+        entropy_coef = 0.01
+
+        loss = torch.mean(-entropy_coef * (log_probs * advantages))
+
         loss.backward()
         self.optimizer.step()
         self.onpolicy_reset()
@@ -102,9 +105,7 @@ class PGAgent:
         discounted_rewards = np.zeros_like(rewards, dtype=np.float32)
         running_add = 0
         for t in reversed(range(0, len(rewards))):
-            if rewards[t] != 0:
-                running_add = 0
-            running_add = running_add * DISCOUNT + rewards[t]
+            running_add = rewards[t] + running_add * DISCOUNT
             discounted_rewards[t] = running_add
         return discounted_rewards
 
@@ -309,12 +310,12 @@ def main():
             )
             print("*****************************************************")
 
-        print(
-            f"Episode: {episode},  Reward: {sum(r)}",
-        )
+        # print(
+        #     f"Episode: {episode},  Reward: {sum(r)}",
+        # )
 
         # end of episode
-        if episode % TRAIN_EVERY == 0:
+        if episode % TRAIN_EVERY == 0 and sum(r) != 0:
             loss = agent.train(r, baselines)
             # print("loss: ", loss)
             r = []
