@@ -24,7 +24,7 @@ class PGAgent:
         # Main model
         self.device = device
         self.model = self.create_model().to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)  # Adam
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3, weight_decay=1e-5)  # Adam
 
         os.makedirs(f"checkpoints/{date.today()}", exist_ok=True)
         self.onpolicy_reset()
@@ -37,9 +37,14 @@ class PGAgent:
         model = nn.Sequential(
             nn.Linear(6400, 300),
             nn.ReLU(),
-            nn.Linear(300, 2),
-            nn.Softmax(dim=-1),
+            nn.Linear(300, 100),
+            nn.ReLU(),
+            nn.Linear(100, 2),
+            nn.Softmax(dim=-1)
         )
+
+        for param in model.parameters():
+            param.requires_grad = True 
 
         return model
 
@@ -55,61 +60,32 @@ class PGAgent:
 
         return action.item()
 
-    def train(self, r, baselines):
-        self.optimizer.zero_grad()
-
-        log_probs = torch.stack(self.log_probs).to(self.device)
-        r = self.disccount_n_standarise(r)
-        rewards = torch.tensor(r).view(-1, 1).to(self.device)
-
-        # Calculate advantages using baselines
-        # advantages = rewards - torch.tensor(baselines, dtype=torch.float32).view(
-        #     -1, 1
-        # ).to(self.device)
-        advantages = rewards
-
-        entropy_coef = 0.01
-
-        loss = torch.mean(-entropy_coef * (log_probs * advantages))
-
-        loss.backward()
-        self.optimizer.step()
-        self.onpolicy_reset()
-
-        return loss.item()
-
     def update_policy(self, rewards):
         eps = 1e-8
         R = 0
         policy_loss = []
         returns = []
+
+        # Calculate discounted returns
         for r in rewards[::-1]:
             R = r + DISCOUNT * R
             returns.insert(0, R)
+
+        # Convert returns to tensor and normalize
         returns = torch.tensor(returns)
         returns = (returns - returns.mean()) / (returns.std() + eps)
+
+         # Compute policy loss
         for log_prob, R in zip(self.log_probs, returns):
             policy_loss.append((-log_prob * R).unsqueeze(0))
+
+        # Zero gradients, backward pass, and optimization step
         self.optimizer.zero_grad()
         policy_loss = torch.cat(policy_loss).sum()
         policy_loss.backward()
         self.optimizer.step()
 
         self.onpolicy_reset()
-
-    def discount_reward(self, rewards):
-        discounted_rewards = np.zeros_like(rewards, dtype=np.float32)
-        running_add = 0
-        for t in reversed(range(0, len(rewards))):
-            running_add = rewards[t] + running_add * DISCOUNT
-            discounted_rewards[t] = running_add
-        return discounted_rewards
-
-    def disccount_n_standarise(self, r):
-        dr = self.discount_reward(r)
-        dr -= np.mean(dr)
-        dr /= np.std(dr) if np.std(dr) > 0 else 1
-        return dr
 
 
 def preprocess(I):
@@ -131,7 +107,7 @@ def main():
     print("Detected device: ", device)
 
     agent = PGAgent(device=device)
-    environment = gym.make("Pong-v0")
+    environment = gym.make("Pong-v4")
     best_reward = -np.inf
 
     r = []
@@ -170,7 +146,7 @@ def main():
         )
 
         # end of episode
-        if episode % TRAIN_EVERY == 0 and sum(r) != 0:
+        if episode % TRAIN_EVERY == 0:
             # loss = agent.train(r)
             agent.update_policy(r)
             # print("loss: ", loss)
